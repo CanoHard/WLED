@@ -16,6 +16,8 @@
 
 //#include "usermod_v2_empty.h"
 
+#include "../usermods/mqtt_ha_native/usermod_mqtt_ha.h"
+
 #ifdef USERMOD_BUZZER
 #include "../usermods/buzzer/usermod_v2_buzzer.h"
 #endif
@@ -47,26 +49,27 @@
 
 void registerUsermods()
 {
-/*
+  /*
    * Add your usermod class name here
    * || || ||
    * \/ \/ \/
    */
   //usermods.add(new MyExampleUsermod());
-  
-  #ifdef USERMOD_DALLASTEMPERATURE
+
+#ifdef USERMOD_DALLASTEMPERATURE
   usermods.add(new UsermodTemperature());
-  #endif
-  
+#endif
+
   //usermods.add(new UsermodRenameMe());
-  
-  #ifdef USERMOD_BUZZER
+
+  usermods.add(new Usermod_mqtt_ha());
+#ifdef USERMOD_BUZZER
   usermods.add(new BuzzerUsermod());
-  #endif
-  
-  #ifdef USERMOD_BME280
+#endif
+
+#ifdef USERMOD_BME280
   usermods.add(new UsermodBME280());
-  #endif
+#endif
 #ifdef USERMOD_SENSORSTOMQTT
   usermods.add(new UserMod_SensorsToMQTT());
 #endif
@@ -85,6 +88,6 @@ void registerUsermods()
 #endif
 
 #ifdef USERMOD_DHT
-usermods.add(new UsermodDHT());
+  usermods.add(new UsermodDHT());
 #endif
 }
