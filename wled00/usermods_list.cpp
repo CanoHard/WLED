@@ -16,8 +16,9 @@
 
 //#include "usermod_v2_empty.h"
 
+#ifdef USERMOD_MQTT_HA
 #include "../usermods/mqtt_ha_native/usermod_mqtt_ha.h"
-
+#endif
 #ifdef USERMOD_BUZZER
 #include "../usermods/buzzer/usermod_v2_buzzer.h"
 #endif
@@ -61,8 +62,9 @@ void registerUsermods()
 #endif
 
   //usermods.add(new UsermodRenameMe());
-
+#ifdef USERMOD_MQTT_HA
   usermods.add(new Usermod_mqtt_ha());
+#endif
 #ifdef USERMOD_BUZZER
   usermods.add(new BuzzerUsermod());
 #endif

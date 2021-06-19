@@ -2,9 +2,8 @@
 
 #include "wled.h"
 
-//This is an empty v2 usermod template. Please see the file usermod_v2_example.h in the EXAMPLE_v2 usermod folder for documentation on the functions you can use!
-
-String p[50];
+//This usermod makes wled compatible with the native mqtt light implementation in home assistant
+//Made by Pablo Cano
 
 class Usermod_mqtt_ha : public Usermod
 {
@@ -15,8 +14,8 @@ private:
   bool mqttInitialized;
   bool on = false;
   bool init = false;
-  char *payload_o;
-  int brig = 0;
+  char payload_o[192];
+  String modes[MODE_COUNT];
   void mqttInit()
   {
     if (!mqtt)
@@ -45,38 +44,31 @@ private:
     {
       on = true;
     }
-    String topic_ = topic;
-    String msj;
-    msj = "";
-    for (int i = 0; i < len; i++)
-    { //Le el msj
-      msj = msj + (char)payload[i];
-    }
-    String Topic = topic;
-    if (topic_ == command_topic)
+
+    if (strcmp(topic, command_topic) == 0)
     {
       //char payload[192];
 
       StaticJsonDocument<192> doc2;
       StaticJsonDocument<128> doc;
 
-      DeserializationError error = deserializeJson(doc, msj);
+      DeserializationError error = deserializeJson(doc, payload);
 
       if (error)
       {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.f_str());
+        // Serial.print(F("deserializeJson() failed: "));
+        // Serial.println(error.f_str());
         return;
       }
 
-      String state = doc["state"]; 
+      const char *state = doc["state"];
 
-      if (state == "ON" && !on)
+      if (strcmp(state, "ON") == 0 && !on)
       {
         toggleOnOff();
         on = true;
       }
-      else if (state == "OFF" && on)
+      else if (strcmp(state, "OFF") == 0 && on)
       {
         toggleOnOff();
         on = false;
@@ -99,7 +91,7 @@ private:
       }
       if (doc.containsKey("brightness"))
       {
-        bri = doc["brightness"]; 
+        bri = doc["brightness"];
 
         doc2["brightness"] = bri;
       }
@@ -109,15 +101,54 @@ private:
         doc["color_mode"] = "color_temp";
         doc2["color_temp"] = effectSpeed;
       }
-      const char *effect = doc["effect"]; // "[FX=19] Dissolve Rnd"
+      if (doc.containsKey("effect"))
+      {
+        const char *effect = doc["effect"];
+        effectCurrent = searchmode(effect);
+      }
       colorUpdated(NOTIFIER_CALL_MODE_BUTTON);
 
       char sendmsj[180];
       size_t payload_size = serializeJson(doc, sendmsj);
       if (WLED_MQTT_CONNECTED)
       {
-        Serial.println(sendmsj);
         mqtt->publish(state_topic, 0, false, sendmsj, payload_size); //Wled state
+      }
+    }
+  }
+
+  void getmodes() //Parse JSON_mode_names to String[]
+  {
+    String modeseffe = JSON_mode_names;
+    int curremode = 0;
+    bool stringproc = false;
+    int firstindex = 0;
+    for (int i = 0; i < sizeof(JSON_mode_names); i++)
+    {
+      if (JSON_mode_names[i] == '"')
+      {
+        if (!stringproc)
+        {
+          firstindex = i + 1;
+          stringproc = true;
+        }
+        else
+        {
+          modes[curremode] = modeseffe.substring(firstindex, i);
+          stringproc = false;
+          curremode++;
+        }
+      }
+    }
+  }
+
+  int searchmode(const char *mode_name)
+  {
+    for (int i = 0; i < MODE_COUNT; i++)
+    {
+      if (strcmp(mode_name, modes[i].c_str()) == 0)
+      {
+        return i;
       }
     }
   }
@@ -125,6 +156,7 @@ private:
 public:
   void setup()
   {
+    getmodes();
   }
 
   void loop()
@@ -179,9 +211,16 @@ public:
 
     if (!init)
     {
+      JsonArray seg = root["seg"];
+
+      int effect_p = seg[0]["sx"];
+      doc["color_mode"] = "color_temp";
+      doc["color_temp"] = effect_p;
+
       doc["color_mode"] = "rgb";
+
       int r, g, b;
-      JsonArray seg_col = root["seg"]["col"];
+      JsonArray seg_col = seg[0]["col"];
 
       if (seg_col[1].size() > 0)
       {
@@ -211,11 +250,11 @@ public:
       color["g"] = g;
       color["b"] = b;
 
-      int effect_p = root["seg"]["sx"];
-      doc["color_mode"] = "color_temp";
-      doc["color_temp"] = effect_p;
+      int nummode = seg[0]["fx"];
+      doc["effect"] = modes[nummode];
       init = true;
     }
+
     if (root["seg"].containsKey("col"))
     {
       doc["color_mode"] = "rgb";
@@ -249,24 +288,22 @@ public:
       color["g"] = g;
       color["b"] = b;
     }
-    if (root["seg"].containsKey("sx"))
+
+    if (root["seg"].containsKey("fx"))
     {
-      int effect_p = root["seg"]["sx"];
-      doc["color_mode"] = "color_temp";
-      doc["color_temp"] = effect_p;
+      int nummode = root["seg"]["fx"];
+      doc["effect"] = modes[nummode];
     }
 
-    //doc["effect"] = "[FX=10] Scan";
-
     size_t payload_size = serializeJson(doc, payload);
-    //Serial.println(payload);
     if (WLED_MQTT_CONNECTED)
     {
       mqtt->publish(state_topic, 0, false, payload, payload_size); //Wled state
     }
     else
     {
-      payload_o = payload; //Last state
+
+      strcpy(payload_o, payload);
     }
   }
 };
