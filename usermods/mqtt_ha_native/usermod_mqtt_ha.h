@@ -8,12 +8,13 @@
 class Usermod_mqtt_ha : public Usermod
 {
 private:
-  const char *availability_topic = "test/av";
-  const char *command_topic = "test/wled";
-  const char *state_topic = "test/wled/s";
+  const char *availability_topic = "p/luces/muro_1";
+  const char *command_topic = "p/luces/muro_1/c";
+  const char *state_topic = "p/luces/muro_1/s";
   bool mqttInitialized;
   bool on = false;
   bool init = false;
+  bool offmsj = false;
   char payload_o[192];
   String modes[MODE_COUNT];
   void mqttInit()
@@ -31,7 +32,10 @@ private:
   {
     mqtt->subscribe(command_topic, 0);                    //Subscribe to receive commands
     mqtt->publish(availability_topic, 0, true, "online"); //Will topic
-    mqtt->publish(state_topic, 0, false, payload_o);      //Wled state
+    if (offmsj)
+    {
+      mqtt->publish(state_topic, 0, false, payload_o); //Wled state
+    }
   }
 
   void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
@@ -47,7 +51,6 @@ private:
 
     if (strcmp(topic, command_topic) == 0)
     {
-      //char payload[192];
 
       StaticJsonDocument<192> doc2;
       StaticJsonDocument<128> doc;
@@ -120,12 +123,14 @@ private:
   void getmodes() //Parse JSON_mode_names to String[]
   {
     String modeseffe = JSON_mode_names;
+
     int curremode = 0;
     bool stringproc = false;
     int firstindex = 0;
+
     for (int i = 0; i < sizeof(JSON_mode_names); i++)
     {
-      if (JSON_mode_names[i] == '"')
+      if (modeseffe.charAt(i) == '"')
       {
         if (!stringproc)
         {
@@ -178,6 +183,7 @@ public:
      */
   void readFromJsonState(JsonObject &root)
   {
+
     char payload[192];
 
     StaticJsonDocument<192> doc;
@@ -190,15 +196,14 @@ public:
     {
       on = true;
     }
-
-    if (root.containsKey("on"))
-    {
-      on = root["on"];
-    }
     if (root.containsKey("bri"))
     {
       doc["brightness"] = root["bri"];
       on = true;
+    }
+    if (root.containsKey("on"))
+    {
+      on = root["on"];
     }
     if (on)
     {
@@ -296,14 +301,16 @@ public:
     }
 
     size_t payload_size = serializeJson(doc, payload);
+    //Serial.println(payload); //DEBUG
     if (WLED_MQTT_CONNECTED)
     {
       mqtt->publish(state_topic, 0, false, payload, payload_size); //Wled state
+      offmsj = false;
     }
     else
     {
-
       strcpy(payload_o, payload);
+      offmsj = true;
     }
   }
 };
