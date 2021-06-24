@@ -2,13 +2,19 @@
 
 #include "wled.h"
 
-//This usermod makes wled compatible with the native mqtt light implementation in home assistant
+//This usermod makes wled compatible with the native mqtt light implementation in home assistant, uses mqtt discovery 
 //Made by Pablo Cano
+
+//CONFIG----------------------------
+
+const char *homeassistant_prefix = "homeassistant"; //Home assistant prefix for mqtt autodiscovery
+const char *topic_prefix = "hogar/campo";  //Topics prefix
+
+
 
 class Usermod_mqtt_ha : public Usermod
 {
-private:
-  const char *homeassistant_prefix = "homeassistant";
+private: 
   char availability_topic[40];
   char command_topic[40];
   char state_topic[40];
@@ -37,7 +43,7 @@ private:
     if (offmsj)
     {
       mqtt->publish(state_topic, 0, false, payload_o); //Wled state
-      autodiscovery();
+      autodiscovery(); //Configure autodiscovery
     }
   }
 
@@ -195,10 +201,11 @@ public:
   void setup()
   {
     getmodes();
+    //Create topics 
     sprintf(homeassistant_discovery_topic, "%s/light/%s/config", homeassistant_prefix, mqttClientID);
-    sprintf(state_topic, "home/light/%s/s", mqttClientID);
-    sprintf(command_topic, "home/light/%s/c", mqttClientID);
-    sprintf(availability_topic, "home/light/%s", mqttClientID);
+    sprintf(state_topic, "%s/light/%s/s",topic_prefix, mqttClientID);
+    sprintf(command_topic, "%s/light/%s/c",topic_prefix, mqttClientID);
+    sprintf(availability_topic, "%s/light/%s",topic_prefix, mqttClientID);
   }
 
   void loop()
