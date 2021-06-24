@@ -8,9 +8,11 @@
 class Usermod_mqtt_ha : public Usermod
 {
 private:
-  const char *availability_topic = "p/luces/muro_1";
-  const char *command_topic = "p/luces/muro_1/c";
-  const char *state_topic = "p/luces/muro_1/s";
+  const char *homeassistant_prefix = "homeassistant";
+  char availability_topic[40];
+  char command_topic[40];
+  char state_topic[40];
+  char homeassistant_discovery_topic[56];
   bool mqttInitialized;
   bool on = false;
   bool init = false;
@@ -35,6 +37,7 @@ private:
     if (offmsj)
     {
       mqtt->publish(state_topic, 0, false, payload_o); //Wled state
+      autodiscovery();
     }
   }
 
@@ -158,10 +161,44 @@ private:
     }
   }
 
+  void autodiscovery()
+  {
+    DynamicJsonDocument doc(4096);
+
+    doc["schema"] = "json";
+    doc["name"] = mqttClientID;
+    doc["state_topic"] = state_topic;
+    doc["command_topic"] = command_topic;
+    doc["availability_topic"] = availability_topic;
+    doc["brightness"] = true;
+    doc["color_mode"] = true;
+    doc["max_mireds"] = 255;
+    doc["min_mireds"] = 0;
+    doc["effect"] = true;
+    JsonArray effect_list = doc.createNestedArray("effect_list");
+    for (int i = 0; i < MODE_COUNT; i++)
+    {
+      effect_list.add(modes[i]);
+    }
+
+    JsonArray supported_color_modes = doc.createNestedArray("supported_color_modes");
+    supported_color_modes.add("rgb");
+    supported_color_modes.add("color_temp");
+
+    char outputbuf[2500];
+    serializeJson(doc, outputbuf);
+    Serial.println(homeassistant_discovery_topic);
+    mqtt->publish(homeassistant_discovery_topic, 0, true, outputbuf);
+  }
+
 public:
   void setup()
   {
     getmodes();
+    sprintf(homeassistant_discovery_topic, "%s/light/%s/config", homeassistant_prefix, mqttClientID);
+    sprintf(state_topic, "home/light/%s/s", homeassistant_prefix);
+    sprintf(command_topic, "home/light/%s/c", homeassistant_prefix);
+    sprintf(availability_topic, "home/light/%s", homeassistant_prefix);
   }
 
   void loop()
