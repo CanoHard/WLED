@@ -187,7 +187,7 @@ private:
 
     char outputbuf[2500];
     serializeJson(doc, outputbuf);
-    Serial.println(homeassistant_discovery_topic);
+    //Serial.println(homeassistant_discovery_topic);
     mqtt->publish(homeassistant_discovery_topic, 0, true, outputbuf);
   }
 
@@ -196,9 +196,9 @@ public:
   {
     getmodes();
     sprintf(homeassistant_discovery_topic, "%s/light/%s/config", homeassistant_prefix, mqttClientID);
-    sprintf(state_topic, "home/light/%s/s", homeassistant_prefix);
-    sprintf(command_topic, "home/light/%s/c", homeassistant_prefix);
-    sprintf(availability_topic, "home/light/%s", homeassistant_prefix);
+    sprintf(state_topic, "home/light/%s/s", mqttClientID);
+    sprintf(command_topic, "home/light/%s/c", mqttClientID);
+    sprintf(availability_topic, "home/light/%s", mqttClientID);
   }
 
   void loop()
