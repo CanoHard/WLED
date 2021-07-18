@@ -2,19 +2,17 @@
 
 #include "wled.h"
 
-//This usermod makes wled compatible with the native mqtt light implementation in home assistant, uses mqtt discovery 
+//This usermod makes wled compatible with the native mqtt light implementation in home assistant, uses mqtt discovery
 //Made by Pablo Cano
 
 //CONFIG----------------------------
 
 const char *homeassistant_prefix = "homeassistant"; //Home assistant prefix for mqtt autodiscovery
-const char *topic_prefix = "hogar/campo";  //Topics prefix
-
-
+const char *topic_prefix = "hogar/campo";           //Topics prefix
 
 class Usermod_mqtt_ha : public Usermod
 {
-private: 
+private:
   char availability_topic[40];
   char command_topic[40];
   char state_topic[40];
@@ -42,8 +40,9 @@ private:
     mqtt->publish(availability_topic, 0, true, "online"); //Will topic
     if (offmsj)
     {
-      mqtt->publish(state_topic, 0, false, payload_o); //Wled state
-      autodiscovery(); //Configure autodiscovery
+      //mqtt->publish(state_topic, 0, false, payload_o); //Wled state
+      autodiscovery();                                 //Configure autodiscovery
+      sendData();
     }
   }
 
@@ -124,7 +123,8 @@ private:
       size_t payload_size = serializeJson(doc, sendmsj);
       if (WLED_MQTT_CONNECTED)
       {
-        mqtt->publish(state_topic, 0, false, sendmsj, payload_size); //Wled state
+        //mqtt->publish(state_topic, 0, false, sendmsj, payload_size); //Wled state
+        sendData();
       }
     }
   }
@@ -197,15 +197,53 @@ private:
     mqtt->publish(homeassistant_discovery_topic, 0, true, outputbuf);
   }
 
+  void sendData() //Sends the actual wled state
+  {
+    StaticJsonDocument<192> datadoc;
+
+    if (bri == 0)
+    {
+      on = false;
+    }
+    else
+    {
+      on = true;
+    }
+    if (on)
+    {
+      datadoc["state"] = "ON";
+    }
+    else
+    {
+      datadoc["state"] = "OFF";
+    }
+    datadoc["brightness"] = bri;
+    JsonObject color = datadoc.createNestedObject("color");
+    color["r"] = col[0];
+    color["g"] = col[1];
+    color["b"] = col[2];
+
+    datadoc["color_mode"] = "rgb";
+
+    datadoc["effect"] = modes[effectCurrent];
+
+    char sendmsj[180];
+    size_t payload_size = serializeJson(datadoc, sendmsj);
+    if (WLED_MQTT_CONNECTED)
+    {
+      mqtt->publish(state_topic, 0, false, sendmsj, payload_size); //Wled state
+    }
+  }
+
 public:
   void setup()
   {
     getmodes();
-    //Create topics 
+    //Create topics
     sprintf(homeassistant_discovery_topic, "%s/light/%s/config", homeassistant_prefix, mqttClientID);
-    sprintf(state_topic, "%s/light/%s/s",topic_prefix, mqttClientID);
-    sprintf(command_topic, "%s/light/%s/c",topic_prefix, mqttClientID);
-    sprintf(availability_topic, "%s/light/%s",topic_prefix, mqttClientID);
+    sprintf(state_topic, "%s/light/%s/s", topic_prefix, mqttClientID);
+    sprintf(command_topic, "%s/light/%s/c", topic_prefix, mqttClientID);
+    sprintf(availability_topic, "%s/light/%s", topic_prefix, mqttClientID);
   }
 
   void loop()
@@ -348,13 +386,9 @@ public:
     //Serial.println(payload); //DEBUG
     if (WLED_MQTT_CONNECTED)
     {
-      mqtt->publish(state_topic, 0, false, payload, payload_size); //Wled state
+      sendData();
+      //mqtt->publish(state_topic, 0, false, payload, payload_size); //Wled state
       offmsj = false;
-    }
-    else
-    {
-      strcpy(payload_o, payload);
-      offmsj = true;
     }
   }
 };
