@@ -2,7 +2,7 @@
 
 #include "wled.h"
 
-//This usermod makes wled compatible with the native mqtt light implementation in home assistant, uses mqtt discovery
+//This usermod makes wled compatible with the native mqtt light implementation in home assistant, uses mqtt autodiscovery
 //Made by Pablo Cano
 
 //CONFIG----------------------------
@@ -21,7 +21,6 @@ private:
   bool on = false;
   bool init = false;
   bool offmsj = false;
-  char payload_o[192];
   String modes[MODE_COUNT];
   void mqttInit()
   {
@@ -40,7 +39,6 @@ private:
     mqtt->publish(availability_topic, 0, true, "online"); //Will topic
     if (offmsj)
     {
-      //mqtt->publish(state_topic, 0, false, payload_o); //Wled state
       autodiscovery();                                 //Configure autodiscovery
       sendData();
     }
@@ -60,7 +58,6 @@ private:
     if (strcmp(topic, command_topic) == 0)
     {
 
-      StaticJsonDocument<192> doc2;
       StaticJsonDocument<128> doc;
 
       DeserializationError error = deserializeJson(doc, payload);
@@ -95,22 +92,16 @@ private:
         col[1] = g;
         col[2] = b;
         doc["color_mode"] = "rgb";
-        JsonObject color2 = doc2.createNestedObject("color");
-        color2["r"] = r;
-        color2["g"] = g;
-        color2["b"] = b;
+
       }
       if (doc.containsKey("brightness"))
       {
         bri = doc["brightness"];
-
-        doc2["brightness"] = bri;
       }
       if (doc.containsKey("color_temp"))
       {
         effectSpeed = doc["color_temp"];
         doc["color_mode"] = "color_temp";
-        doc2["color_temp"] = effectSpeed;
       }
       if (doc.containsKey("effect"))
       {
@@ -119,11 +110,8 @@ private:
       }
       colorUpdated(NOTIFIER_CALL_MODE_BUTTON);
 
-      char sendmsj[180];
-      size_t payload_size = serializeJson(doc, sendmsj);
       if (WLED_MQTT_CONNECTED)
       {
-        //mqtt->publish(state_topic, 0, false, sendmsj, payload_size); //Wled state
         sendData();
       }
     }
@@ -266,129 +254,14 @@ public:
   void readFromJsonState(JsonObject &root)
   {
 
-    char payload[192];
-
-    StaticJsonDocument<192> doc;
-
-    if (bri == 0)
-    {
-      on = false;
-    }
-    else
-    {
-      on = true;
-    }
-    if (root.containsKey("bri"))
-    {
-      doc["brightness"] = root["bri"];
-      on = true;
-    }
-    if (root.containsKey("on"))
-    {
-      on = root["on"];
-    }
-    if (on)
-    {
-      doc["state"] = "ON";
-    }
-    else
-    {
-      doc["state"] = "OFF";
-    }
-
-    if (!init)
-    {
-      JsonArray seg = root["seg"];
-
-      int effect_p = seg[0]["sx"];
-      doc["color_mode"] = "color_temp";
-      doc["color_temp"] = effect_p;
-
-      doc["color_mode"] = "rgb";
-
-      int r, g, b;
-      JsonArray seg_col = seg[0]["col"];
-
-      if (seg_col[1].size() > 0)
-      {
-        JsonArray seg_col_1 = seg_col[1];
-        r = seg_col_1[0];
-        g = seg_col_1[1];
-        b = seg_col_1[2];
-      }
-
-      if (seg_col[2].size() > 0)
-      {
-        JsonArray seg_col_2 = seg_col[2];
-        r = seg_col_2[0];
-        g = seg_col_2[1];
-        b = seg_col_2[2];
-      }
-
-      if (seg_col[0].size() > 0)
-      {
-        JsonArray seg_col_0 = seg_col[0];
-        r = seg_col_0[0];
-        g = seg_col_0[1];
-        b = seg_col_0[2];
-      }
-      JsonObject color = doc.createNestedObject("color");
-      color["r"] = r;
-      color["g"] = g;
-      color["b"] = b;
-
-      int nummode = seg[0]["fx"];
-      doc["effect"] = modes[nummode];
-      init = true;
-    }
-
-    if (root["seg"].containsKey("col"))
-    {
-      doc["color_mode"] = "rgb";
-      int r, g, b;
-      JsonArray seg_col = root["seg"]["col"];
-
-      if (seg_col[1].size() > 0)
-      {
-        JsonArray seg_col_1 = seg_col[1];
-        r = seg_col_1[0];
-        g = seg_col_1[1];
-        b = seg_col_1[2];
-      }
-
-      if (seg_col[2].size() > 0)
-      {
-        JsonArray seg_col_2 = seg_col[2];
-        r = seg_col_2[0];
-        g = seg_col_2[1];
-        b = seg_col_2[2];
-      }
-      if (seg_col[0].size() > 0)
-      {
-        JsonArray seg_col_0 = seg_col[0];
-        r = seg_col_0[0];
-        g = seg_col_0[1];
-        b = seg_col_0[2];
-      }
-      JsonObject color = doc.createNestedObject("color");
-      color["r"] = r;
-      color["g"] = g;
-      color["b"] = b;
-    }
-
-    if (root["seg"].containsKey("fx"))
-    {
-      int nummode = root["seg"]["fx"];
-      doc["effect"] = modes[nummode];
-    }
-
-    size_t payload_size = serializeJson(doc, payload);
-    //Serial.println(payload); //DEBUG
     if (WLED_MQTT_CONNECTED)
     {
       sendData();
-      //mqtt->publish(state_topic, 0, false, payload, payload_size); //Wled state
       offmsj = false;
+    }
+    else
+    {
+      offmsj = true;
     }
   }
 };
