@@ -20,6 +20,9 @@
 
 //#include "usermod_v2_empty.h"
 
+#ifdef USERMOD_MQTT_HA
+#include "../usermods/mqtt_ha_native/usermod_mqtt_ha.h"
+#endif
 #ifdef USERMOD_BUZZER
 #include "../usermods/buzzer/usermod_v2_buzzer.h"
 #endif
@@ -75,7 +78,7 @@
 
 void registerUsermods()
 {
-/*
+  /*
    * Add your usermod class name here
    * || || ||
    * \/ \/ \/
@@ -100,6 +103,22 @@ void registerUsermods()
   usermods.add(new UsermodBME280());
   #endif
   #ifdef USERMOD_SENSORSTOMQTT
+#ifdef USERMOD_DALLASTEMPERATURE
+  usermods.add(new UsermodTemperature());
+#endif
+
+  //usermods.add(new UsermodRenameMe());
+#ifdef USERMOD_MQTT_HA
+  usermods.add(new Usermod_mqtt_ha());
+#endif
+#ifdef USERMOD_BUZZER
+  usermods.add(new BuzzerUsermod());
+#endif
+
+#ifdef USERMOD_BME280
+  usermods.add(new UsermodBME280());
+#endif
+#ifdef USERMOD_SENSORSTOMQTT
   usermods.add(new UserMod_SensorsToMQTT());
   #endif
   #ifdef USERMOD_PIRSWITCH
@@ -142,4 +161,8 @@ void registerUsermods()
   #ifdef USERMOD_ELEKSTUBE_IPS
   usermods.add(new ElekstubeIPSUsermod());
   #endif
+}
+#ifdef USERMOD_DHT
+  usermods.add(new UsermodDHT());
+#endif
 }
