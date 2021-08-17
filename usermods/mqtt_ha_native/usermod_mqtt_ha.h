@@ -108,7 +108,7 @@ private:
         const char *effect = doc["effect"];
         effectCurrent = searchmode(effect);
       }
-      colorUpdated(NOTIFIER_CALL_MODE_BUTTON);
+      colorUpdated(CALL_MODE_BUTTON);
 
       if (WLED_MQTT_CONNECTED)
       {
