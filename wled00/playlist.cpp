@@ -53,16 +53,16 @@ void unloadPlaylist() {
 }
 
 
-void loadPlaylist(JsonObject playlistObj, byte presetId) {
+int16_t loadPlaylist(JsonObject playlistObj, byte presetId) {
   unloadPlaylist();
   
   JsonArray presets = playlistObj["ps"];
   playlistLen = presets.size();
-  if (playlistLen == 0) return;
+  if (playlistLen == 0) return -1;
   if (playlistLen > 100) playlistLen = 100;
 
   playlistEntries = new PlaylistEntry[playlistLen];
-  if (playlistEntries == nullptr) return;
+  if (playlistEntries == nullptr) return -1;
 
   byte it = 0;
   for (int ps : presets) {
@@ -113,11 +113,12 @@ void loadPlaylist(JsonObject playlistObj, byte presetId) {
 
   currentPlaylist = presetId;
   DEBUG_PRINTLN(F("Playlist loaded."));
+  return currentPlaylist;
 }
 
 
 void handlePlaylist() {
-  if (currentPlaylist < 0 || playlistEntries == nullptr || presetCyclingEnabled) return;
+  if (currentPlaylist < 0 || playlistEntries == nullptr) return;
 
   if (millis() - presetCycledTime > (100*playlistEntryDur)) {
     presetCycledTime = millis();

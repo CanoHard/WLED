@@ -2,6 +2,130 @@
 
 ### Builds after release 0.12.0
 
+#### Build 2108050
+
+-   Fixed undesirable color transition from Orange to boot preset color on first boot
+-   Removed misleading Delete button on new playlist with one entry
+-   Updated NeoPixelBus to 2.6.7 and AsyncTCP to 1.1.1
+
+#### Build 2107230
+
+-   Added skinning (extra custom CSS) (PR #2084)
+-   Added presets/config backup/restore (PR #2084)
+-   Added option for using length instead of Stop LED in UI (PR #2048)
+-   Added custom `holidays.json` holiday list (PR #2048)
+
+#### Build 2107100
+
+-   Version bump to 0.13.0-b2 "Toki"
+-   Accept hex color strings in individual LED API
+-   Fixed transition property not applying unless power/bri/color changed next
+-   Moved transition field below segments (temporarily)
+-   Reduced unneeded websockets pushes
+
+#### Build 2107091
+
+-   Fixed presets using wrong call mode (e.g. causing buttons to send UDP under direct change type)
+-   Increased hue buffer
+-   Renamed `NOTIFIER_CALL_MODE_` to `CALL_MODE_`
+
+#### Build 2107090
+
+-   Busses extend total configured LEDs if required
+-   Fixed extra button pins defaulting to 0 on first boot
+
+#### Build 2107080
+
+-   Made Peek use the main websocket connection instead of opening a second one
+-   Temperature usermod fix (from @blazoncek's dev branch)
+
+#### Build 2107070
+
+-   More robust initial resource loading in UI
+-   Added `getJsonValue()` for usermod config parsing (PR #2061)
+-   Fixed preset saving over websocket
+-   Alpha ESP32 S2 support (filesystem does not work) (PR #2067)
+
+#### Build 2107042
+
+-   Updated ArduinoJson to 6.18.1
+-   Improved Twinkleup effect
+-   Fixed preset immediately deselecting when set via HTTP API `PL=`
+
+#### Build 2107041
+
+-   Restored support for "PL=~" mistakenly removed in 2106300
+-   JSON IR improvements
+
+#### Build 2107040
+
+-   Playlist entries are now more compact
+-   Added the possibility to enter negative numbers for segment offset
+
+#### Build 2107021
+
+-   Added WebSockets support to UI
+
+#### Build 2107020
+
+-   Send websockets on every state change
+-   Improved Aurora effect
+
+#### Build 2107011
+
+-   Added MQTT button feedback option (PR #2011)
+
+#### Build 2107010
+
+-   Added JSON IR codes (PR #1941)
+-   Adjusted the width of WiFi and LED settings input fields
+-   Fixed a minor visual issue with slider trail not reaching thumb on low values
+
+#### Build 2106302
+
+-   Fixed settings page broken by using "%" in input fields
+
+#### Build 2106301
+
+-   Fixed a problem with disabled buttons reverting to pin 0 causing conflict
+
+#### Build 2106300
+
+-   Version bump to 0.13.0-b0 "Toki"
+-   BREAKING: Removed preset cycle (use playlists)
+-   BREAKING: Removed `nl.fade`, `leds.pin` and `ccnf` from JSON API
+-   Added playlist editor UI
+-   Reordered segment UI and added offset field
+-   Raised maximum MQTT password length to 64 (closes #1373)
+
+#### Build 2106290
+
+-   Added Offset to segments, allows shifting the LED considered first within a segment
+-   Added `of` property to seg object in JSON API to set offset
+-   Usermod settings improvements (PR #2043, PR #2045)
+
+#### Build 2106250
+
+-   Fixed preset only disabling on second effect/color change
+
+#### Build 2106241
+
+-   BREAKING: Added ability for usermods to force a config save if config incomplete. `readFromConfig()` needs to return a `bool` to indicate if the config is complete
+-   Updated usermods implementing `readFromConfig()`
+-   Auto-create segments based on configured busses
+
+#### Build 2106200
+
+-   Added 2 Ethernet boards and split Ethernet configs into separate file
+
+#### Build 2106180
+
+-   Fixed DOS on Chrome tab restore causing reboot
+
+#### Build 2106170
+
+-   Optimized JSON buffer usage (pre-serialized color arrays)
+
 #### Build 2106140
 
 -   Updated main logo

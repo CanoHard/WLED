@@ -1,5 +1,6 @@
 #define WLED_DEFINE_GLOBAL_VARS //only in one source file, wled.cpp!
 #include "wled.h"
+#include "wled_ethernet.h"
 #include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_DISABLE_BROWNOUT_DET)
@@ -14,68 +15,6 @@
 WLED::WLED()
 {
 }
-
-#ifdef WLED_USE_ETHERNET
-// settings for various ethernet boards
-typedef struct EthernetSettings {
-  uint8_t        eth_address;
-  int            eth_power;
-  int            eth_mdc;
-  int            eth_mdio;
-  eth_phy_type_t eth_type;
-  eth_clock_mode_t eth_clk_mode;
-} ethernet_settings;
-
-ethernet_settings ethernetBoards[] = {
-  // None
-  {
-  },
-  
-  // WT32-EHT01
-  // Please note, from my testing only these pins work for LED outputs:
-  //   IO2, IO4, IO12, IO14, IO15
-  // These pins do not appear to work from my testing:
-  //   IO35, IO36, IO39
-  {
-    1,                 // eth_address, 
-    16,                // eth_power, 
-    23,                // eth_mdc, 
-    18,                // eth_mdio, 
-    ETH_PHY_LAN8720,   // eth_type,
-    ETH_CLOCK_GPIO0_IN // eth_clk_mode
-  },
-
-  // ESP32-POE
-  {
-     0,                  // eth_address, 
-    12,                  // eth_power, 
-    23,                  // eth_mdc, 
-    18,                  // eth_mdio, 
-    ETH_PHY_LAN8720,     // eth_type,
-    ETH_CLOCK_GPIO17_OUT // eth_clk_mode
-  },
-
-   // WESP32
-  {
-    0,			              // eth_address,
-    -1,			              // eth_power,
-    16,			              // eth_mdc,
-    17,			              // eth_mdio,
-    ETH_PHY_LAN8720,      // eth_type,
-    ETH_CLOCK_GPIO0_IN	  // eth_clk_mode
-  },
-
-  // QuinLed-ESP32-Ethernet
-  {
-    0,			              // eth_address,
-    5,			              // eth_power,
-    23,			              // eth_mdc,
-    18,			              // eth_mdio,
-    ETH_PHY_LAN8720,      // eth_type,
-    ETH_CLOCK_GPIO17_OUT	// eth_clk_mode
-  }
-};
-#endif
 
 // turns all LEDs off and restarts ESP
 void WLED::reset()
@@ -256,10 +195,17 @@ void WLED::loop()
     strip.isRgbw = false;
     for (uint8_t i = 0; i < WLED_MAX_BUSSES; i++) {
       if (busConfigs[i] == nullptr) break;
-      mem += busses.memUsage(*busConfigs[i]);
-      if (mem <= MAX_LED_MEMORY) busses.add(*busConfigs[i]);
-      //if (BusManager::isRgbw(busConfigs[i]->type)) strip.isRgbw = true;
-      strip.isRgbw = (strip.isRgbw || BusManager::isRgbw(busConfigs[i]->type));
+      
+      if (busConfigs[i]->adjustBounds(ledCount)) {
+        mem += busses.memUsage(*busConfigs[i]);
+        if (mem <= MAX_LED_MEMORY) {
+          busses.add(*busConfigs[i]);
+          //RGBW mode is enabled if at least one of the strips is RGBW
+          strip.isRgbw = (strip.isRgbw || BusManager::isRgbw(busConfigs[i]->type));
+          //refresh is required to remain off if at least one of the strips requires the refresh.
+          strip.isOffRefreshRequred |= BusManager::isOffRefreshRequred(busConfigs[i]->type);
+        }
+      }
       delete busConfigs[i]; busConfigs[i] = nullptr;
     }
     strip.finalizeInit(ledCount);
@@ -344,6 +290,8 @@ void WLED::setup()
 #ifdef WLED_USE_DMX //reserve GPIO2 as hardcoded DMX pin
   pinManager.allocatePin(2);
 #endif
+
+  for (uint8_t i=1; i<WLED_MAX_BUTTONS; i++) btnPin[i] = -1;
 
   bool fsinit = false;
   DEBUGFS_PRINTLN(F("Mount FS"));
@@ -439,22 +387,18 @@ void WLED::beginStrip()
   strip.setShowCallback(handleOverlayDraw);
 
   if (bootPreset > 0) {
-    applyPreset(bootPreset);
+    applyPreset(bootPreset, CALL_MODE_INIT);
   } else if (turnOnAtBoot) {
     if (briS > 0) bri = briS;
     else if (bri == 0) bri = 128;
   } else {
     briLast = briS; bri = 0;
   }
-  colorUpdated(NOTIFIER_CALL_MODE_INIT);
+  colorUpdated(CALL_MODE_INIT);
 
   // init relay pin
   if (rlyPin>=0)
     digitalWrite(rlyPin, (rlyMde ? bri : !bri));
-
-  // disable button if it is "pressed" unintentionally
-  //if (btnPin>=0 && buttonType == BTN_TYPE_PUSH && isButtonPressed())
-  //  buttonType = BTN_TYPE_NONE;
 }
 
 void WLED::initAP(bool resetAP)
@@ -502,14 +446,60 @@ void WLED::initConnection()
   // Only initialize ethernet board if not NONE
   if (ethernetType != WLED_ETH_NONE && ethernetType < WLED_NUM_ETH_TYPES) {
     ethernet_settings es = ethernetBoards[ethernetType];
-    ETH.begin(
-      (uint8_t) es.eth_address, 
-      (int)     es.eth_power, 
-      (int)     es.eth_mdc, 
-      (int)     es.eth_mdio, 
-      (eth_phy_type_t)   es.eth_type,
-      (eth_clock_mode_t) es.eth_clk_mode
-    );
+    // Use PinManager to ensure pins are available for
+    // ethernet AND to prevent other uses of these pins.
+    bool s = true;
+    byte pinsAllocated[4] { 255, 255, 255, 255 };
+
+    if (s && (s = pinManager.allocatePin((byte)es.eth_power))) {
+      pinsAllocated[0] = (byte)es.eth_power;
+    }
+    if (s && (s = pinManager.allocatePin((byte)es.eth_mdc))) {
+      pinsAllocated[1] = (byte)es.eth_mdc;
+    }
+    if (s && (s = pinManager.allocatePin((byte)es.eth_mdio))) {
+      pinsAllocated[2] = (byte)es.eth_mdio;
+    }
+    switch(es.eth_clk_mode) {
+      case ETH_CLOCK_GPIO0_IN:
+        s = pinManager.allocatePin(0, false);
+        pinsAllocated[3] = 0;
+        break;
+      case ETH_CLOCK_GPIO0_OUT:
+        s = pinManager.allocatePin(0);
+        pinsAllocated[3] = 0;
+        break;
+      case ETH_CLOCK_GPIO16_OUT:
+        s = pinManager.allocatePin(16);
+        pinsAllocated[3] = 16;
+        break;
+      case ETH_CLOCK_GPIO17_OUT:
+        s = pinManager.allocatePin(17);
+        pinsAllocated[3] = 17;
+        break;
+      default:
+        s = false;
+        break;
+    }
+
+    if (s) {
+      s = ETH.begin(
+        (uint8_t) es.eth_address, 
+        (int)     es.eth_power, 
+        (int)     es.eth_mdc, 
+        (int)     es.eth_mdio, 
+        (eth_phy_type_t)   es.eth_type,
+        (eth_clock_mode_t) es.eth_clk_mode
+      );
+    }
+    
+    if (!s) {
+      DEBUG_PRINTLN(F("Ethernet init failed"));
+      // de-allocate only those pins allocated before the failure
+      for (byte p : pinsAllocated) {
+        pinManager.deallocatePin(p);
+      }
+    }
   }
 #endif
 

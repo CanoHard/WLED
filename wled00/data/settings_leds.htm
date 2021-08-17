@@ -18,6 +18,16 @@
     function off(n){
       d.getElementsByName(n)[0].value = -1;
     }
+    var timeout;
+    function showToast(text, error = false)
+    {
+      var x = gId("toast");
+      x.innerHTML = text;
+      x.className = error ? "error":"show";
+      clearTimeout(timeout);
+      x.style.animation = 'none';
+      timeout = setTimeout(function(){ x.className = x.className.replace("show", ""); }, 2900);
+    }
     function bLimits(b,p,m) {
       maxB = b; maxM = m; maxPB = p;
     }
@@ -183,7 +193,6 @@
       gId('ledwarning').style.color = (sLC > maxPB || maxLC > maxPB || bquot > 100) ? 'red':'orange';
       gId('wreason').innerHTML = (bquot > 80) ? "80% of max. LED memory" +(bquot>100 ? ` (<b>WARNING: Using over ${maxM}B!</b>)` : "") : "800 LEDs per pin";
 
-      //var val = Math.ceil((100 + d.Sf.LC.value * laprev)/500)/2;
       var val = Math.ceil((100 + sLC * laprev)/500)/2;
 			val = (val > 5) ? Math.ceil(val) : val;
 			var s = "";
@@ -205,10 +214,13 @@
       s2 += "A is enough)<br>";
 			gId('psu').innerHTML = s;
       gId('psu2').innerHTML = isWS2815 ? "" : s2;
+      gId("json").style.display = d.Sf.IT.value==8 ? "" : "none";
     }
     function lastEnd(i) {
       if (i<1) return 0;
       v = parseInt(d.getElementsByName("LS"+(i-1))[0].value) + parseInt(d.getElementsByName("LC"+(i-1))[0].value);
+      var type = parseInt(d.getElementsByName("LT"+(i-1))[0].value);
+      if (type > 31 && type < 48) v = 1; //PWM busses
       if (isNaN(v)) return 0;
       return v;
     }
@@ -251,11 +263,11 @@ Color Order:
 <option value="4">BGR</option>
 <option value="5">GBR</option>
 </select><br>
-<span id="p0d${i}">Pin:</span> <input type="number" name="L0${i}" min="0" max="40" required style="width:35px" onchange="UI()"/>
-<span id="p1d${i}">Clock:</span> <input type="number" name="L1${i}" min="0" max="40" style="width:35px" onchange="UI()"/>
-<span id="p2d${i}"></span><input type="number" name="L2${i}" min="0" max="40" style="width:35px" onchange="UI()"/>
-<span id="p3d${i}"></span><input type="number" name="L3${i}" min="0" max="40" style="width:35px" onchange="UI()"/>
-<span id="p4d${i}"></span><input type="number" name="L4${i}" min="0" max="40" style="width:35px" onchange="UI()"/>
+<span id="p0d${i}">Pin:</span> <input type="number" class="xs" name="L0${i}" min="0" max="33" required onchange="UI()"/>
+<span id="p1d${i}">Clock:</span> <input type="number" class="xs" name="L1${i}" min="0" max="33" onchange="UI()"/>
+<span id="p2d${i}"></span><input type="number" class="xs" name="L2${i}" min="0" max="33" onchange="UI()"/>
+<span id="p3d${i}"></span><input type="number" class="xs" name="L3${i}" min="0" max="33" onchange="UI()"/>
+<span id="p4d${i}"></span><input type="number" class="xs" name="L4${i}" min="0" max="33" onchange="UI()"/>
 <br>
 <span id="psd${i}">Start:</span> <input type="number" name="LS${i}" id="ls${i}" min="0" max="8191" value="${lastEnd(i)}" required />&nbsp;
 <div id="dig${i}" style="display:inline">
@@ -279,18 +291,30 @@ Reverse (rotated 180°): <input type="checkbox" name="CV${i}">
       var c = gId("btns").innerHTML;
       var bt = "BT" + i;
       var be = "BE" + i;
-      c += `Button ${i} pin: <input type="number" min="-1" max="40" name="${bt}" onchange="UI()" style="width:35px" value="${p}">&nbsp;`;
+      c += `Button ${i} pin: <input type="number" class="xs" min="-1" max="40" name="${bt}" onchange="UI()" value="${p}">&nbsp;`;
       c += `<select name="${be}">`
       c += `<option value="0" ${t==0?"selected":""}>Disabled</option>`;
       c += `<option value="2" ${t==2?"selected":""}>Pushbutton</option>`;
       c += `<option value="3" ${t==3?"selected":""}>Push inverted</option>`;
       c += `<option value="4" ${t==4?"selected":""}>Switch</option>`;
-      c += `<option value="5" ${t==4?"selected":""}>Switch inverted</option>`;
+      c += `<option value="5" ${t==5?"selected":""}>PIR sensor</option>`;
       c += `<option value="6" ${t==6?"selected":""}>Touch</option>`;
       c += `<option value="7" ${t==7?"selected":""}>Analog</option>`;
+      c += `<option value="8" ${t==8?"selected":""}>Analog inverted</option>`;
       c += `</select>`;
       c += `<span style="cursor: pointer;" onclick="off('${bt}')">&nbsp;&#215;</span><br>`;
       gId("btns").innerHTML = c;
+    }
+    function uploadFile(name) {
+      var req = new XMLHttpRequest();
+      req.addEventListener('load', function(){showToast(this.responseText)});
+      req.addEventListener('error', function(e){showToast(e.stack,true);});
+      req.open("POST", "/upload");
+      var formData = new FormData();
+      formData.append("data", d.Sf.data.files[0], name);
+      req.send(formData);
+      d.Sf.data.value = '';
+      return false;
     }
 		function GetV()
 		{
@@ -314,7 +338,7 @@ Reverse (rotated 180°): <input type="checkbox" name="CV${i}">
     <br>
     Enable automatic brightness limiter: <input type="checkbox" name="ABen" onchange="enABL()" id="able"><br>
     <div id="abl">
-      Maximum Current: <input name="MA" type="number" min="250" max="65000" oninput="UI()" required> mA<br>
+      Maximum Current: <input name="MA" type="number" class="l" min="250" max="65000" oninput="UI()" required> mA<br>
       <div id="ampwarning" style="color: orange; display: none;">
         &#9888; Your power supply provides high current.<br>
         To improve the safety of your setup,<br>
@@ -347,36 +371,38 @@ Reverse (rotated 180°): <input type="checkbox" name="CV${i}">
       Use less than <span id="wreason">800 LEDs per pin</span> for the best experience!<br>
     </div><hr style="width:260px">
     <div id="btns"></div>
-    Touch threshold: <input type="number" min="0" max="100" name="TT" required><br>
-    IR pin: <input type="number" min="-1" max="40" name="IR" onchange="UI()" style="width:35px">&nbsp;<select name="IT">
-    <option value="0">Remote disabled</option>
-    <option value="1">24-key RGB</option>
-    <option value="2">24-key with CT</option>
-    <option value="3">40-key blue</option>
-    <option value="4">44-key RGB</option>
-    <option value="5">21-key RGB</option>
-    <option value="6">6-key black</option>
-    <option value="7">9-key red</option>
+    Touch threshold: <input type="number" class="s" min="0" max="100" name="TT" required><br>
+    IR pin: <input type="number" class="xs" min="-1" max="40" name="IR" onchange="UI()">&nbsp;<select name="IT" onchange="UI()">
+    <option value=0>Remote disabled</option>
+    <option value=1>24-key RGB</option>
+    <option value=2>24-key with CT</option>
+    <option value=3>40-key blue</option>
+    <option value=4>44-key RGB</option>
+    <option value=5>21-key RGB</option>
+    <option value=6>6-key black</option>
+    <option value=7>9-key red</option>
+    <option value=8>JSON remote</option>
     </select><span style="cursor: pointer;" onclick="off('IR')">&nbsp;&#215;</span><br>
+    <div id="json" style="display:none;">JSON file: <input type="file" name="data" accept=".json"> <input type="button" value="Upload" onclick="uploadFile('/ir.json');"><br></div>
+    <div id="toast"></div>
     <a href="https://github.com/Aircoookie/WLED/wiki/Infrared-Control" target="_blank">IR info</a><br>
-    Relay pin: <input type="number" min="-1" max="40" name="RL" onchange="UI()" style="width:35px"> Invert <input type="checkbox" name="RM"><span style="cursor: pointer;" onclick="off('RL')">&nbsp;&#215;</span><br>
+    Relay pin: <input type="number" class="xs" min="-1" max="33" name="RL" onchange="UI()"> Invert <input type="checkbox" name="RM"><span style="cursor: pointer;" onclick="off('RL')">&nbsp;&#215;</span><br>
     <hr style="width:260px">
 		<h3>Defaults</h3>
 		Turn LEDs on after power up/reset: <input type="checkbox" name="BO"><br>
-    Default brightness: <input name="CA" type="number" min="0" max="255" required> (0-255)<br><br>
-    Apply preset <input name="BP" type="number" min="0" max="250" required> at boot (0 uses defaults)
-    <br>- <i>or</i> -<br>
-    Set current preset cycle setting as boot default: <input type="checkbox" name="PC"><br><br>
+    Default brightness: <input name="CA" type="number" class="s" min="0" max="255" required> (0-255)<br><br>
+    Apply preset <input name="BP" type="number" class="s" min="0" max="250" required> at boot (0 uses defaults)
+    <br><br>
 		Use Gamma correction for color: <input type="checkbox" name="GC"> (strongly recommended)<br>
 		Use Gamma correction for brightness: <input type="checkbox" name="GB"> (not recommended)<br><br>
-		Brightness factor: <input name="BF" type="number" min="1" max="255" required> %
+		Brightness factor: <input name="BF" type="number" class="s" min="1" max="255" required> %
 		<h3>Transitions</h3>
 		Crossfade: <input type="checkbox" name="TF"><br>
-		Transition Time: <input name="TD" maxlength="5" size="2"> ms<br>
+		Transition Time: <input name="TD" type="number" class="l" min="0" max="65500"> ms<br>
 		Enable Palette transitions: <input type="checkbox" name="PF">
 		<h3>Timed light</h3>
-		Default Duration: <input name="TL" type="number" min="1" max="255" required> min<br>
-		Default Target brightness: <input name="TB" type="number" min="0" max="255" required><br>
+		Default Duration: <input name="TL" type="number" class="s" min="1" max="255" required> min<br>
+		Default Target brightness: <input name="TB" type="number" class="s" min="0" max="255" required><br>
 		Mode:
     <select name="TW">
 			<option value="0">Wait and set</option>
@@ -402,7 +428,7 @@ Reverse (rotated 180°): <input type="checkbox" name="CV${i}">
         <option value=4>Legacy</option>
       </select>
     <br></span><hr>
-		<button type="button" onclick="B()">Back</button><button type="submit">Save</button>
+    <button type="button" onclick="B()">Back</button><button type="submit">Save</button>
 	</form>
 </body>
 </html>

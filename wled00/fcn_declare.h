@@ -32,6 +32,27 @@ bool deserializeConfigSec();
 void serializeConfig();
 void serializeConfigSec();
 
+template<typename DestType>
+bool getJsonValue(const JsonVariant& element, DestType& destination) {
+  if (element.isNull()) {
+    return false;
+  }
+
+  destination = element.as<DestType>();
+  return true;
+}
+
+template<typename DestType, typename DefaultType>
+bool getJsonValue(const JsonVariant& element, DestType& destination, const DefaultType defaultValue) {
+  if(!getJsonValue(element, destination)) {
+    destination = defaultValue;
+    return false;
+  }
+
+  return true;
+}
+
+
 //colors.cpp
 void colorFromUint32(uint32_t in, bool secondary = false);
 void colorFromUint24(uint32_t in, bool secondary = false);
@@ -87,6 +108,7 @@ void decodeIR44(uint32_t code);
 void decodeIR21(uint32_t code);
 void decodeIR6(uint32_t code);
 void decodeIR9(uint32_t code);
+void decodeIRJson(uint32_t code);
 
 void initIR();
 void handleIR();
@@ -98,7 +120,7 @@ void handleIR();
 #include "FX.h"
 
 void deserializeSegment(JsonObject elem, byte it, byte presetId = 0);
-bool deserializeState(JsonObject root, byte presetId = 0);
+bool deserializeState(JsonObject root, byte callMode = CALL_MODE_DIRECT_CHANGE, byte presetId = 0);
 void serializeSegment(JsonObject& root, WS2812FX::Segment& seg, byte id, bool forPreset = false, bool segmentBounds = true);
 void serializeState(JsonObject root, bool forPreset = false, bool includeBri = true, bool segmentBounds = true);
 void serializeInfo(JsonObject root);
@@ -155,11 +177,11 @@ void _drawOverlayCronixie();
 //playlist.cpp
 void shufflePlaylist();
 void unloadPlaylist();
-void loadPlaylist(JsonObject playlistObject, byte presetId = 0);
+int16_t loadPlaylist(JsonObject playlistObject, byte presetId = 0);
 void handlePlaylist();
 
 //presets.cpp
-bool applyPreset(byte index);
+bool applyPreset(byte index, byte callMode = CALL_MODE_DIRECT_CHANGE);
 void savePreset(byte index, bool persist = true, const char* pname = nullptr, JsonObject saveobj = JsonObject());
 void deletePreset(byte index);
 
@@ -189,7 +211,7 @@ class Usermod {
     virtual void addToJsonInfo(JsonObject& obj) {}
     virtual void readFromJsonState(JsonObject& obj) {}
     virtual void addToConfig(JsonObject& obj) {}
-    virtual void readFromConfig(JsonObject& obj) {}
+    virtual bool readFromConfig(JsonObject& obj) { return true; } // Note as of 2021-06 readFromConfig() now needs to return a bool, see usermod_v2_example.h
     virtual void onMqttConnect(bool sessionPresent) {}
     virtual bool onMqttMessage(char* topic, char* payload) { return false; }
     virtual uint16_t getId() {return USERMOD_ID_UNSPECIFIED;}
@@ -211,7 +233,7 @@ class UsermodManager {
     void readFromJsonState(JsonObject& obj);
 
     void addToConfig(JsonObject& obj);
-    void readFromConfig(JsonObject& obj);
+    bool readFromConfig(JsonObject& obj);
     void onMqttConnect(bool sessionPresent);
     bool onMqttMessage(char* topic, char* payload);
     bool add(Usermod* um);

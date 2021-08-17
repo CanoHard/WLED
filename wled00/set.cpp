@@ -164,7 +164,6 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
 
     briS = request->arg(F("CA")).toInt();
 
-    saveCurrPresetCycConf = request->hasArg(F("PC"));
     turnOnAtBoot = request->hasArg(F("BO"));
     t = request->arg(F("BP")).toInt();
     if (t <= 250) bootPreset = t;
@@ -256,10 +255,11 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
     t = request->arg(F("MQPORT")).toInt();
     if (t > 0) mqttPort = t;
     strlcpy(mqttUser, request->arg(F("MQUSER")).c_str(), 41);
-    if (!isAsterisksOnly(request->arg(F("MQPASS")).c_str(), 41)) strlcpy(mqttPass, request->arg(F("MQPASS")).c_str(), 41);
+    if (!isAsterisksOnly(request->arg(F("MQPASS")).c_str(), 41)) strlcpy(mqttPass, request->arg(F("MQPASS")).c_str(), 65);
     strlcpy(mqttClientID, request->arg(F("MQCID")).c_str(), 41);
     strlcpy(mqttDeviceTopic, request->arg(F("MD")).c_str(), 33);
     strlcpy(mqttGroupTopic, request->arg(F("MG")).c_str(), 33);
+    buttonPublishMqtt = request->hasArg(F("BM"));
     #endif
 
     #ifndef WLED_DISABLE_HUESYNC
@@ -431,8 +431,8 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
       String value = request->arg(i);
 
       // POST request parameters are combined as <usermodname>_<usermodparameter>
-      uint8_t umNameEnd = name.indexOf("_");
-      if (!umNameEnd) break;  // parameter does not contain "_" -> wrong
+      int umNameEnd = name.indexOf(":");
+      if (umNameEnd<1) break;  // parameter does not contain ":" or on 1st place -> wrong
 
       JsonObject mod = um[name.substring(0,umNameEnd)]; // get a usermod JSON object
       if (mod.isNull()) {
@@ -442,30 +442,60 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
       DEBUG_PRINT(":");
       name = name.substring(umNameEnd+1); // remove mod name from string
 
+      // if the resulting name still contains ":" this means nested object
+      JsonObject subObj;
+      int umSubObj = name.indexOf(":");
+      DEBUG_PRINTF("(%d):",umSubObj);
+      if (umSubObj>0) {
+        subObj = mod[name.substring(0,umSubObj)];
+        if (subObj.isNull())
+          subObj = mod.createNestedObject(name.substring(0,umSubObj));
+        name = name.substring(umSubObj+1); // remove nested object name from string
+      } else {
+        subObj = mod;
+      }
+      DEBUG_PRINT(name);
+
       // check if parameters represent array
       if (name.endsWith("[]")) {
         name.replace("[]","");
-        if (!mod[name].is<JsonArray>()) {
-          JsonArray ar = mod.createNestedArray(name);
-          ar.add(value);
+        if (!subObj[name].is<JsonArray>()) {
+          JsonArray ar = subObj.createNestedArray(name);
+          ar.add(value.toInt());
           j=0;
         } else {
-          mod[name].add(value);
+          subObj[name].add(value.toInt());
           j++;
         }
-        DEBUG_PRINT(name);
         DEBUG_PRINT("[");
         DEBUG_PRINT(j);
         DEBUG_PRINT("] = ");
         DEBUG_PRINTLN(value);
       } else {
-        mod.remove(name);  // checkboxes get two fields (first is always "off", existence of second depends on checkmark and may be "on")
-        mod[name] = value;
-        DEBUG_PRINT(name);
+        // we are using a hidden field with the same name as our parameter (!before the actual parameter!)
+        // to describe the type of parameter (text,float,int), for boolean patameters the first field contains "off"
+        // so checkboxes have one or two fields (first is always "false", existence of second depends on checkmark and may be "true")
+        if (subObj[name].isNull()) {
+          // the first occurence of the field describes the parameter type (used in next loop)
+          if (value == "false") subObj[name] = false; // checkboxes may have only one field
+          else                  subObj[name] = value;
+        } else {
+          String type = subObj[name].as<String>();  // get previously stored value as a type
+          if (subObj[name].is<bool>())   subObj[name] = true;   // checkbox/boolean
+          else if (type == "number") {
+            value.replace(",",".");      // just in case conversion
+            if (value.indexOf(".") >= 0) subObj[name] = value.toFloat();  // we do have a float
+            else                         subObj[name] = value.toInt();    // we may have an int
+          } else if (type == "int")      subObj[name] = value.toInt();
+          else                           subObj[name] = value;  // text fields
+        }
         DEBUG_PRINT(" = ");
         DEBUG_PRINTLN(value);
       }
     }
+    #ifdef WLED_DEBUG
+    serializeJson(um,Serial); DEBUG_PRINTLN();
+    #endif
     usermods.readFromConfig(um);  // force change of usermod parameters
   }
 
@@ -522,13 +552,6 @@ bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply)
   DEBUG_PRINTLN(req);
 
   strip.applyToAllSelected = false;
-  //snapshot to check if request changed values later, temporary.
-  byte prevCol[4] = {col[0], col[1], col[2], col[3]};
-  byte prevColSec[4] = {colSec[0], colSec[1], colSec[2], colSec[3]};
-  byte prevEffect = effectCurrent;
-  byte prevSpeed = effectSpeed;
-  byte prevIntensity = effectIntensity;
-  byte prevPalette = effectPalette;
 
   //segment select (sets main segment)
   byte prevMain = strip.getMainSegmentId();
@@ -581,36 +604,27 @@ bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply)
   }
   strip.setSegment(selectedSeg, startI, stopI, grpI, spcI);
 
-   //set presets
+  pos = req.indexOf(F("PS=")); //saves current in preset
+  if (pos > 0) savePreset(getNumVal(&req, pos));
+
   pos = req.indexOf(F("P1=")); //sets first preset for cycle
   if (pos > 0) presetCycleMin = getNumVal(&req, pos);
 
   pos = req.indexOf(F("P2=")); //sets last preset for cycle
   if (pos > 0) presetCycleMax = getNumVal(&req, pos);
 
-  //preset cycle
-  pos = req.indexOf(F("CY="));
-  if (pos > 0)
-  {
-    char cmd = req.charAt(pos+3);
-    if (cmd == '2') presetCyclingEnabled = !presetCyclingEnabled;
-    else presetCyclingEnabled = (cmd != '0');
-    presetCycCurr = presetCycleMin;
-  }
-
-  pos = req.indexOf(F("PT=")); //sets cycle time in ms
-  if (pos > 0) {
-    int v = getNumVal(&req, pos);
-    if (v > 100) presetCycleTime = v/100;
-  }
-
-  pos = req.indexOf(F("PS=")); //saves current in preset
-  if (pos > 0) savePreset(getNumVal(&req, pos));
-
   //apply preset
   if (updateVal(&req, "PL=", &presetCycCurr, presetCycleMin, presetCycleMax)) {
     applyPreset(presetCycCurr);
   }
+
+  //snapshot to check if request changed values later, temporary.
+  byte prevCol[4] = {col[0], col[1], col[2], col[3]};
+  byte prevColSec[4] = {colSec[0], colSec[1], colSec[2], colSec[3]};
+  byte prevEffect = effectCurrent;
+  byte prevSpeed = effectSpeed;
+  byte prevIntensity = effectIntensity;
+  byte prevPalette = effectPalette;
 
   //set brightness
   updateVal(&req, "&A=", &bri);
@@ -643,7 +657,6 @@ bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply)
       nightlightActive = false; //always disable nightlight when toggling
     }
   }
-
   #endif
 
   //set hue
@@ -704,7 +717,7 @@ bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply)
   }
 
   //set effect parameters
-  if (updateVal(&req, "FX=", &effectCurrent, 0, strip.getModeCount()-1)) presetCyclingEnabled = false;
+  if (updateVal(&req, "FX=", &effectCurrent, 0, strip.getModeCount()-1)) unloadPlaylist();
   updateVal(&req, "SX=", &effectSpeed);
   updateVal(&req, "IX=", &effectIntensity);
   updateVal(&req, "FP=", &effectPalette, 0, strip.getPaletteCount()-1);
@@ -906,7 +919,7 @@ bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply)
   strip.applyToAllSelected = false;
 
   pos = req.indexOf(F("&NN")); //do not send UDP notifications this time
-  colorUpdated((pos > 0) ? NOTIFIER_CALL_MODE_NO_NOTIFY : NOTIFIER_CALL_MODE_DIRECT_CHANGE);
+  colorUpdated((pos > 0) ? CALL_MODE_NO_NOTIFY : CALL_MODE_DIRECT_CHANGE);
 
   return true;
 }

@@ -3,12 +3,12 @@
 /*
    Main sketch, global variable declarations
    @title WLED project sketch
-   @version 0.12.1-b1
+   @version 0.13.0-b2
    @author Christian Schwinne
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2106140
+#define VERSION 2108050
 
 //uncomment this if you have a "my_config.h" file you'd like to use
 //#define WLED_USE_MY_CONFIG
@@ -200,14 +200,13 @@ using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;
 
 // Global Variable definitions
 WLED_GLOBAL char versionString[] _INIT(TOSTRING(WLED_VERSION));
-#define WLED_CODENAME "Hikari"
+#define WLED_CODENAME "Toki"
 
 // AP and OTA default passwords (for maximum security change them!)
 WLED_GLOBAL char apPass[65]  _INIT(DEFAULT_AP_PASS);
 WLED_GLOBAL char otaPass[33] _INIT(DEFAULT_OTA_PASS);
 
-// Hardware CONFIG (only changeble HERE, not at runtime)
-// LED strip pin, button pin and IR pin changeable in NpbWrapper.h!
+// Hardware and pin config
 #ifndef BTNPIN
 WLED_GLOBAL int8_t btnPin[WLED_MAX_BUTTONS] _INIT({0});
 #else
@@ -339,7 +338,7 @@ WLED_GLOBAL char mqttDeviceTopic[33] _INIT("");            // main MQTT topic (i
 WLED_GLOBAL char mqttGroupTopic[33] _INIT("wled/all");     // second MQTT topic (for example to group devices)
 WLED_GLOBAL char mqttServer[33] _INIT("");                 // both domains and IPs should work (no SSL)
 WLED_GLOBAL char mqttUser[41] _INIT("");                   // optional: username for MQTT auth
-WLED_GLOBAL char mqttPass[41] _INIT("");                   // optional: password for MQTT auth
+WLED_GLOBAL char mqttPass[65] _INIT("");                   // optional: password for MQTT auth
 WLED_GLOBAL char mqttClientID[41] _INIT("");               // override the client ID
 WLED_GLOBAL uint16_t mqttPort _INIT(1883);
 
@@ -443,6 +442,7 @@ WLED_GLOBAL byte briLast _INIT(128);          // brightness before turned off. U
 WLED_GLOBAL byte whiteLast _INIT(128);        // white channel before turned off. Used for toggle function
 
 // button
+WLED_GLOBAL bool buttonPublishMqtt                            _INIT(false);
 WLED_GLOBAL bool buttonPressedBefore[WLED_MAX_BUTTONS]        _INIT({false});
 WLED_GLOBAL bool buttonLongPressed[WLED_MAX_BUTTONS]          _INIT({false});
 WLED_GLOBAL unsigned long buttonPressedTime[WLED_MAX_BUTTONS] _INIT({0});
@@ -453,7 +453,7 @@ WLED_GLOBAL byte touchThreshold                               _INIT(TOUCH_THRESH
 WLED_GLOBAL bool notifyDirectDefault _INIT(notifyDirect);
 WLED_GLOBAL bool receiveNotifications _INIT(true);
 WLED_GLOBAL unsigned long notificationSentTime _INIT(0);
-WLED_GLOBAL byte notificationSentCallMode _INIT(NOTIFIER_CALL_MODE_INIT);
+WLED_GLOBAL byte notificationSentCallMode _INIT(CALL_MODE_INIT);
 WLED_GLOBAL bool notificationTwoRequired _INIT(false);
 
 // effects
@@ -501,15 +501,12 @@ WLED_GLOBAL byte timerWeekday[] _INIT_N(({ 255, 255, 255, 255, 255, 255, 255, 25
 // blynk
 WLED_GLOBAL bool blynkEnabled _INIT(false);
 
-// preset cycling
-WLED_GLOBAL bool presetCyclingEnabled _INIT(false);
-WLED_GLOBAL byte presetCycleMin _INIT(1), presetCycleMax _INIT(5);
-WLED_GLOBAL uint16_t presetCycleTime _INIT(12);
+//playlists
 WLED_GLOBAL unsigned long presetCycledTime _INIT(0);
+WLED_GLOBAL int16_t currentPlaylist _INIT(-1);
+//still used for "PL=~" HTTP API command
+WLED_GLOBAL byte presetCycleMin _INIT(1), presetCycleMax _INIT(5);
 WLED_GLOBAL byte presetCycCurr _INIT(presetCycleMin);
-WLED_GLOBAL bool saveCurrPresetCycConf _INIT(false);
-
-WLED_GLOBAL int16_t currentPlaylist _INIT(0);
 
 // realtime
 WLED_GLOBAL byte realtimeMode _INIT(REALTIME_MODE_INACTIVE);
@@ -522,7 +519,7 @@ WLED_GLOBAL uint16_t tpmPayloadFrameSize _INIT(0);
 // mqtt
 WLED_GLOBAL unsigned long lastMqttReconnectAttempt _INIT(0);
 WLED_GLOBAL unsigned long lastInterfaceUpdate _INIT(0);
-WLED_GLOBAL byte interfaceUpdateCallMode _INIT(NOTIFIER_CALL_MODE_INIT);
+WLED_GLOBAL byte interfaceUpdateCallMode _INIT(CALL_MODE_INIT);
 WLED_GLOBAL char mqttStatusTopic[40] _INIT("");        // this must be global because of async handlers
 
 // alexa udp
@@ -562,7 +559,6 @@ WLED_GLOBAL bool doCloseFile _INIT(false);
 
 // presets
 WLED_GLOBAL int16_t currentPreset _INIT(-1);
-WLED_GLOBAL bool isPreset _INIT(false);
 
 WLED_GLOBAL byte errorFlag _INIT(0);
 
