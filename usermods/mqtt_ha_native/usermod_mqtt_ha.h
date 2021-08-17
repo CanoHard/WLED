@@ -37,11 +37,11 @@ private:
   {
     mqtt->subscribe(command_topic, 0);                    //Subscribe to receive commands
     mqtt->publish(availability_topic, 0, true, "online"); //Will topic
-    if (offmsj)
-    {
+   // if (offmsj)
+    //{
       autodiscovery();                                 //Configure autodiscovery
       sendData();
-    }
+    //}
   }
 
   void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
@@ -182,7 +182,9 @@ private:
     char outputbuf[2500];
     serializeJson(doc, outputbuf);
     //Serial.println(homeassistant_discovery_topic);
+    //Serial.println(outputbuf);
     mqtt->publish(homeassistant_discovery_topic, 0, true, outputbuf);
+    
   }
 
   void sendData() //Sends the actual wled state
